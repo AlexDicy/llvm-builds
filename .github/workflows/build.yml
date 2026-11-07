@@ -1,0 +1,121 @@
+# Builds the LLVM packages Ens links against, per platform, with the configuration Ens uses, and
+# publishes them as release assets. Dispatch only: each selected platform costs tens of minutes.
+name: build
+
+on:
+  workflow_dispatch:
+    inputs:
+      linux_x64:
+        description: "Linux x86_64"
+        type: boolean
+        default: true
+      linux_arm64:
+        description: "Linux arm64"
+        type: boolean
+        default: true
+      macos_arm64:
+        description: "macOS arm64"
+        type: boolean
+        default: true
+      windows_x64:
+        description: "Windows x86_64"
+        type: boolean
+        default: true
+      windows_arm64:
+        description: "Windows arm64"
+        type: boolean
+        default: true
+      tag:
+        description: "Release tag to publish under"
+        type: string
+        default: "llvm-21.1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.slug }}
+    if: github.event.inputs[matrix.key] == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { key: linux_x64,     slug: linux-x64,     os: ubuntu-22.04,     plat: linux,   arch: x64 }
+          - { key: linux_arm64,   slug: linux-arm64,   os: ubuntu-22.04-arm, plat: linux,   arch: arm64 }
+          - { key: macos_arm64,   slug: macos-arm64,   os: macos-15,         plat: macosx,  arch: arm64 }
+          - { key: windows_x64,   slug: windows-x64,   os: windows-2022,     plat: windows, arch: x64 }
+          - { key: windows_arm64, slug: windows-arm64, os: windows-11-arm,   plat: windows, arch: arm64 }
+    runs-on: ${{ matrix.os }}
+    env:
+      # the xmake Ens's own CI pins, so the configure here matches the configure there
+      XMAKE_VERSION: '3.1.1'
+      LLVM_VERSION: '21.1.0'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: ${{ env.XMAKE_VERSION }}
+
+      # binutils-dev carries plugin-api.h, which LLVM's gold plugin target compiles against; the
+      # rest are the libraries LLVM looks for.
+      - name: Install the LLVM build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            binutils-dev zlib1g-dev libzstd-dev libedit-dev libffi-dev libxml2-dev pkg-config
+
+      - name: Resolve and install the packages
+        run: |
+          xmake f -y -m release -p ${{ matrix.plat }} -a ${{ matrix.arch }}
+          xmake require -y
+
+      - name: Pack the installed prefixes
+        shell: bash
+        run: |
+          set -eu
+          for name in llvm libllvm; do
+            dir=$(find "$HOME/.xmake/packages/l/$name/$LLVM_VERSION" -mindepth 1 -maxdepth 1 -type d | head -1)
+            test -n "$dir"
+            out="llvm-$LLVM_VERSION-${{ matrix.slug }}-$name.tar.xz"
+            if [ "${RUNNER_OS}" = "Windows" ]; then
+              (cd "$dir" && 7z a -txz "$GITHUB_WORKSPACE/$out" ./* > /dev/null)
+            else
+              tar -cJf "$out" -C "$dir" .
+            fi
+            ls -l "$out"
+            sha256sum "$out" >> SHA256SUMS.txt
+          done
+          cat SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.slug }}
+          path: |
+            llvm-*.tar.xz
+            SHA256SUMS.txt
+          if-no-files-found: error
+
+  release:
+    name: release
+    needs: build
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
+          cat assets/SHA256SUMS.txt
+          gh release create "$TAG" assets/llvm-*.tar.xz assets/SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --title "$TAG" \
+            --notes "The LLVM packages ens links against, built from source on the platform each asset names. Native objects, no LTO." \
+            || gh release upload "$TAG" assets/llvm-*.tar.xz assets/SHA256SUMS.txt --clobber --repo "$GITHUB_REPOSITORY"
