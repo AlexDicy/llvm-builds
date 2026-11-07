@@ -34,18 +34,53 @@ permissions:
   contents: write
 
 jobs:
+  # Which platforms were ticked, as the matrix the build job runs. A job-level "if" cannot read the
+  # matrix it belongs to, so the choice is resolved here and handed on as JSON.
+  select:
+    name: select
+    runs-on: ubuntu-latest
+    outputs:
+      platforms: ${{ steps.pick.outputs.platforms }}
+    steps:
+      - name: Resolve the ticked platforms
+        id: pick
+        env:
+          LX64: ${{ github.event.inputs.linux_x64 }}
+          LARM: ${{ github.event.inputs.linux_arm64 }}
+          MARM: ${{ github.event.inputs.macos_arm64 }}
+          WX64: ${{ github.event.inputs.windows_x64 }}
+          WARM: ${{ github.event.inputs.windows_arm64 }}
+        run: |
+          set -eu
+          picked="["
+          sep=""
+          add() { picked="$picked$sep$1"; sep=","; }
+          if [ "$LX64" = "true" ]; then
+            add '{"key":"linux_x64","slug":"linux-x64","os":"ubuntu-22.04","plat":"linux","arch":"x64"}'
+          fi
+          if [ "$LARM" = "true" ]; then
+            add '{"key":"linux_arm64","slug":"linux-arm64","os":"ubuntu-22.04-arm","plat":"linux","arch":"arm64"}'
+          fi
+          if [ "$MARM" = "true" ]; then
+            add '{"key":"macos_arm64","slug":"macos-arm64","os":"macos-15","plat":"macosx","arch":"arm64"}'
+          fi
+          if [ "$WX64" = "true" ]; then
+            add '{"key":"windows_x64","slug":"windows-x64","os":"windows-2022","plat":"windows","arch":"x64"}'
+          fi
+          if [ "$WARM" = "true" ]; then
+            add '{"key":"windows_arm64","slug":"windows-arm64","os":"windows-11-arm","plat":"windows","arch":"arm64"}'
+          fi
+          picked="$picked]"
+          echo "platforms=$picked" >> "$GITHUB_OUTPUT"
+          echo "$picked"
+
   build:
     name: ${{ matrix.slug }}
-    if: github.event.inputs[matrix.key] == 'true'
+    needs: select
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { key: linux_x64,     slug: linux-x64,     os: ubuntu-22.04,     plat: linux,   arch: x64 }
-          - { key: linux_arm64,   slug: linux-arm64,   os: ubuntu-22.04-arm, plat: linux,   arch: arm64 }
-          - { key: macos_arm64,   slug: macos-arm64,   os: macos-15,         plat: macosx,  arch: arm64 }
-          - { key: windows_x64,   slug: windows-x64,   os: windows-2022,     plat: windows, arch: x64 }
-          - { key: windows_arm64, slug: windows-arm64, os: windows-11-arm,   plat: windows, arch: arm64 }
+        include: ${{ fromJSON(needs.select.outputs.platforms) }}
     runs-on: ${{ matrix.os }}
     env:
       # the xmake Ens's own CI pins, so the configure here matches the configure there
@@ -64,8 +99,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            binutils-dev zlib1g-dev libzstd-dev libedit-dev libffi-dev libxml2-dev pkg-config
+          sudo apt-get install -y --no-install-recommends binutils-dev zlib1g-dev libzstd-dev libedit-dev libffi-dev libxml2-dev pkg-config
 
       - name: Resolve and install the packages
         run: |
@@ -115,7 +149,4 @@ jobs:
           TAG: ${{ github.event.inputs.tag }}
         run: |
           cat assets/SHA256SUMS.txt
-          gh release create "$TAG" assets/llvm-*.tar.xz assets/SHA256SUMS.txt \
-            --repo "$GITHUB_REPOSITORY" --title "$TAG" \
-            --notes "The LLVM packages ens links against, built from source on the platform each asset names. Native objects, no LTO." \
-            || gh release upload "$TAG" assets/llvm-*.tar.xz assets/SHA256SUMS.txt --clobber --repo "$GITHUB_REPOSITORY"
+          gh release create "$TAG" assets/llvm-*.tar.xz assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes "The LLVM packages ens links against, built from source on the platform each asset names. Native objects, no LTO." || gh release upload "$TAG" assets/llvm-*.tar.xz assets/SHA256SUMS.txt --clobber --repo "$GITHUB_REPOSITORY"
