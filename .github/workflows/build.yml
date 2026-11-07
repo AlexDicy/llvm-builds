@@ -25,6 +25,10 @@ on:
         description: "Windows arm64"
         type: boolean
         default: true
+      publish:
+        description: "Publish the release, or leave it as a draft for other platforms to be added"
+        type: boolean
+        default: true
       tag:
         description: "Release tag to publish under (must be unused: published releases are immutable)"
         type: string
@@ -169,6 +173,7 @@ jobs:
           IN_MACOS_ARM64: ${{ github.event.inputs.macos_arm64 }}
           IN_WINDOWS_X64: ${{ github.event.inputs.windows_x64 }}
           IN_WINDOWS_ARM64: ${{ github.event.inputs.windows_arm64 }}
+          PUBLISH: ${{ github.event.inputs.publish }}
         run: |
           set -eu
           expected=0
@@ -188,5 +193,9 @@ jobs:
           cat assets/SHA256SUMS.txt
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --title "$TAG" --notes "The LLVM packages ens links against, built from source on the platform each asset names. Native objects, no LTO." 2>/dev/null || true
           gh release upload "$TAG" assets/llvm-*.tar.xz assets/SHA256SUMS.txt --clobber --repo "$GITHUB_REPOSITORY"
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
-          echo "published $TAG"
+          if [ "$PUBLISH" = "true" ]; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+            echo "published $TAG"
+          else
+            echo "staged $TAG as a draft"
+          fi
