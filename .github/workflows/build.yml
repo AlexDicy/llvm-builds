@@ -42,7 +42,7 @@ jobs:
   # matrix it belongs to, so the choice is resolved here and handed on as JSON.
   select:
     name: select
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       platforms: ${{ steps.pick.outputs.platforms }}
     steps:
@@ -154,7 +154,7 @@ jobs:
     needs: build
     # publish whatever built, so one broken platform does not throw away the others' work
     if: always() && !cancelled()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/download-artifact@v4
         with:
