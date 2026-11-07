@@ -101,6 +101,11 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends binutils-dev zlib1g-dev libzstd-dev libedit-dev libffi-dev libxml2-dev pkg-config
 
+      # a build tool only, and the one the machine has: see the note in xmake.lua
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14.3'
+
       - name: Resolve and install the packages
         run: |
           xmake f -y -m release -p ${{ matrix.plat }} -a ${{ matrix.arch }}
@@ -110,15 +115,15 @@ jobs:
         shell: bash
         run: |
           set -eu
+          # xmake is the only thing that knows where its global dir is; on Windows it is not $HOME
+          global=$(xmake l -c 'import("core.base.global"); print(global.directory())' | tail -1)
+          echo "global dir: $global"
           for name in llvm libllvm; do
-            dir=$(find "$HOME/.xmake/packages/l/$name/$LLVM_VERSION" -mindepth 1 -maxdepth 1 -type d | head -1)
+            dir=$(find "$global/packages/l/$name/$LLVM_VERSION" -mindepth 1 -maxdepth 1 -type d | head -1)
             test -n "$dir"
             out="llvm-$LLVM_VERSION-${{ matrix.slug }}-$name.tar.xz"
-            if [ "${RUNNER_OS}" = "Windows" ]; then
-              (cd "$dir" && 7z a -txz "$GITHUB_WORKSPACE/$out" ./* > /dev/null)
-            else
-              tar -cJf "$out" -C "$dir" .
-            fi
+            rm -f "$out"
+            tar -cJf "$out" -C "$dir" . || { rm -f "$out"; (cd "$dir" && 7z a -txz "$GITHUB_WORKSPACE/$out" ./* > /dev/null); }
             ls -l "$out"
             sha256sum "$out" >> SHA256SUMS.txt
           done

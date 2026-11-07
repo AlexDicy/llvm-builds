@@ -10,6 +10,10 @@ add_requires("llvm 21.1.0")
 add_requires("libllvm 21.1.0", { configs = { lld = true, clang = false, target_x86 = true, target_aarch64 = true,
                                              cxflags = is_plat("macosx") and "--target=arm64-apple-macos15.0" or nil } })
 
+-- python is only a build tool here, and a source-built one fails on macOS against the runner's
+-- OpenSSL 3: python's _ssl wants _SSLv3_method, which no longer exists. Take the machine's.
+add_requireconfs("**.python", { system = true })
+
 target("packages")
     set_kind("phony")
     add_packages("llvm", "libllvm")
