@@ -30,6 +30,11 @@ ticked platform is its own job and they run in parallel; the release job publish
 
 `SHA256SUMS.txt` carries the digests; Ens pins them by hash in its package definitions.
 
+Published releases are immutable, so a build stages its assets as a draft and publishes them in one
+go, and only when every selected platform is present. Give each build an unused tag (`llvm-21.1.0-1`,
+then `-2` for a rebuild); a partial build leaves a draft behind instead of a release that can never
+be completed.
+
 ## What the archives have to be
 
 - The contents of the installed package prefix, not a build directory: `include/`, `lib/`,
