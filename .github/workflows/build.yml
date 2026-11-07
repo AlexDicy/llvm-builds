@@ -101,10 +101,18 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends binutils-dev zlib1g-dev libzstd-dev libedit-dev libffi-dev libxml2-dev pkg-config
 
-      # a build tool only, and the one the machine has: see the note in xmake.lua
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.14.3'
+      # LLVM's build pulls python in as a build tool, and macOS's python build otherwise finds the
+      # system LibreSSL, which has no _SSLv3_method: that is what broke the first run. brew's
+      # openssl@3 is keg-only, so it has to be pointed at explicitly.
+      - name: Point python's build at brew's OpenSSL 3
+        if: runner.os == 'macOS'
+        run: |
+          prefix=$(brew --prefix openssl@3 2>/dev/null || echo /opt/homebrew/opt/openssl@3)
+          echo "using $prefix"
+          ls "$prefix/lib/libssl.dylib"
+          echo "PKG_CONFIG_PATH=$prefix/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "CPPFLAGS=-I$prefix/include" >> "$GITHUB_ENV"
+          echo "LDFLAGS=-L$prefix/lib" >> "$GITHUB_ENV"
 
       - name: Resolve and install the packages
         run: |
