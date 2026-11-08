@@ -8,7 +8,6 @@ add_repositories("ens ens-repository")
 
 add_requires("llvm 21.1.0")
 add_requires("libllvm 21.1.0", { configs = { lld = true, clang = false, target_x86 = true, target_aarch64 = true,
-                                             libcxx = is_plat("linux") or nil,
                                              cxflags = is_plat("macosx") and "--target=arm64-apple-macos15.0" or nil } })
 
 target("packages")
