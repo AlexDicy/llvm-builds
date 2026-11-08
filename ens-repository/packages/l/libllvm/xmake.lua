@@ -261,6 +261,8 @@ package("libllvm")
                 path.join(libcxx_sdk, "include", "c++", "v1") .. " -isystem " ..
                 path.join(libcxx_sdk, "include", triple, "c++", "v1"))
             table.insert(configs, "-DCMAKE_EXE_LINKER_FLAGS=-L" .. path.join(libcxx_sdk, "lib", triple))
+            -- its native sub-build takes the machine's compiler, not the one given above
+            table.insert(configs, "-DLLVM_OPTIMIZED_TABLEGEN=OFF")
         end
         table.insert(configs, "-DCMAKE_BUILD_TYPE=" .. (package:is_debug() and "Debug" or "Release"))
         table.insert(configs, "-DLLVM_PARALLEL_COMPILE_JOBS=2")
