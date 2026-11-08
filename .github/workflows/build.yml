@@ -118,10 +118,27 @@ jobs:
           echo "CPPFLAGS=-I$prefix/include" >> "$GITHUB_ENV"
           echo "LDFLAGS=-L$prefix/lib" >> "$GITHUB_ENV"
 
+      # the toolchain takes hours to build on a 4-core runner, and it does not change between
+      # attempts at the packages built against it
+      - name: Cache the xmake packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.xmake/packages
+          key: xmake-packages-${{ matrix.slug }}-${{ hashFiles('xmake.lua', 'ens-repository/**') }}
+
       - name: Resolve and install the packages
         run: |
           xmake f -y -m release -p ${{ matrix.plat }} -a ${{ matrix.arch }}
           xmake require -y
+
+      # xmake hides a failed build's output in the package's install log
+      - name: Show the package install log
+        if: failure()
+        run: |
+          for f in $(find ~/.xmake/cache/packages -path '*installdir.failed*' -name install.txt 2>/dev/null); do
+            echo "=== $f"
+            tail -80 "$f"
+          done
 
       - name: Pack the installed prefixes
         shell: bash
