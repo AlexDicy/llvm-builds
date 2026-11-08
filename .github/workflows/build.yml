@@ -118,8 +118,8 @@ jobs:
           echo "CPPFLAGS=-I$prefix/include" >> "$GITHUB_ENV"
           echo "LDFLAGS=-L$prefix/lib" >> "$GITHUB_ENV"
 
-      # the toolchain takes hours to build on a 4-core runner, and it does not change between
-      # attempts at the packages built against it
+      # the packages are built against the toolchain the release publishes, so that what this
+      # repository builds is built against exactly what ens downloads
       - name: Cache the xmake packages
         uses: actions/cache@v4
         with:
