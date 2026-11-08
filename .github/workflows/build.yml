@@ -150,6 +150,15 @@ jobs:
           for name in llvm libllvm; do
             dir=$(find "$global/packages/l/$name/$LLVM_VERSION" -mindepth 1 -maxdepth 1 -type d | head -1)
             test -n "$dir"
+            # the C++ runtime built on this image, so a consumer merges these instead of whatever
+            # its own machine has: a newer glibc's libstdc++ references symbols older systems lack
+            if [ "$name" = "libllvm" ] && [ "$RUNNER_OS" = "Linux" ]; then
+              mkdir -p "$dir/lib/gcc"
+              cp "$(g++ -print-file-name=libstdc++.a)" "$dir/lib/gcc/"
+              cp "$(g++ -print-libgcc-file-name)" "$dir/lib/gcc/"
+              cp "$(dirname "$(g++ -print-libgcc-file-name)")/libgcc_eh.a" "$dir/lib/gcc/"
+              ls -l "$dir/lib/gcc"
+            fi
             out="llvm-$LLVM_VERSION-${{ matrix.slug }}-$name.tar.xz"
             rm -f "$out"
             tar -cJf "$out" -C "$dir" . || { rm -f "$out"; (cd "$dir" && 7z a -txz "$GITHUB_WORKSPACE/$out" ./* > /dev/null); }

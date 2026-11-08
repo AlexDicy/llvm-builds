@@ -191,40 +191,6 @@ package("libllvm")
             end
         end
 
-        -- with libcxx on, LLVM compiles and links against the libc++ the toolchain package carries,
-        -- which is built for the oldest glibc the release supports. The runtimes build cannot
-        -- provide it: LLVM itself needs libc++ headers before they exist.
-        local libcxx_sdk
-        if package:config("libcxx") then
-            import("core.base.global")
-            for _, dir in ipairs(os.dirs(path.join(global.directory(), "packages", "l", "llvm",
-                package:version_str(), "*"))) do
-                if os.isfile(path.join(dir, "bin", "clang")) then
-                    libcxx_sdk = dir
-                    break
-                end
-            end
-            if not libcxx_sdk then
-                raise("the libcxx config needs the llvm package installed first")
-            end
-            for i = #runtimes_enabled, 1, -1 do
-                local name = runtimes_enabled[i]
-                if name == "libcxx" or name == "libcxxabi" then
-                    table.remove(runtimes_enabled, i)
-                end
-            end
-        end
-        for _, target in ipairs(constants.get_llvm_all_targets()) do
-            if package:config("target_" .. target:lower()) then
-                table.insert(targets_enabled, target)
-            end
-        end
-        for _, target in ipairs(constants.get_llvm_experimental_targets()) do
-            if package:config("target_" .. target:lower()) then
-                table.insert(experimental_targets_enabled, target)
-            end
-        end
-
         local configs = {
             "-DBUILD_SHARED_LIBS=OFF",
 
@@ -252,17 +218,6 @@ package("libllvm")
         end
         if #experimental_targets_enabled > 0 then
             table.insert(configs, "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=" .. table.concat(experimental_targets_enabled, ";"))
-        end
-        if libcxx_sdk then
-            local triple = (package:is_arch("arm64", "aarch64") and "aarch64" or "x86_64") .. "-unknown-linux-gnu"
-            table.insert(configs, "-DCMAKE_C_COMPILER=" .. path.join(libcxx_sdk, "bin", "clang"))
-            table.insert(configs, "-DCMAKE_CXX_COMPILER=" .. path.join(libcxx_sdk, "bin", "clang++"))
-            table.insert(configs, "-DCMAKE_CXX_FLAGS=-stdlib=libc++ -nostdinc++ -isystem " ..
-                path.join(libcxx_sdk, "include", "c++", "v1") .. " -isystem " ..
-                path.join(libcxx_sdk, "include", triple, "c++", "v1"))
-            table.insert(configs, "-DCMAKE_EXE_LINKER_FLAGS=-L" .. path.join(libcxx_sdk, "lib", triple))
-            -- its native sub-build takes the machine's compiler, not the one given above
-            table.insert(configs, "-DLLVM_OPTIMIZED_TABLEGEN=OFF")
         end
         table.insert(configs, "-DCMAKE_BUILD_TYPE=" .. (package:is_debug() and "Debug" or "Release"))
         table.insert(configs, "-DLLVM_PARALLEL_COMPILE_JOBS=2")
