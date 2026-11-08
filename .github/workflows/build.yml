@@ -26,9 +26,9 @@ on:
         type: boolean
         default: true
       publish:
-        description: "Publish the release, or leave it as a draft for other platforms to be added"
+        description: "Publish the release, or leave it as a draft to be added to and published by hand"
         type: boolean
-        default: true
+        default: false
       tag:
         description: "Release tag to publish under (must be unused: published releases are immutable)"
         type: string
